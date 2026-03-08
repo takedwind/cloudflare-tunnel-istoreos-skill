@@ -1,101 +1,128 @@
-# Cloudflare Tunnel on iStoreOS Configurator (iStoreOS 上的 Cloudflare Tunnel 自动化配置器)
+---
+name: Cloudflare Tunnel on iStoreOS
+description: Automates the download, installation, and UCI configuration of cloudflared (Cloudflare Tunnel) on iStoreOS or OpenWRT routers.
+---
 
-Simplify and automate the process of setting up **Cloudflare Tunnel (cloudflared)** on iStoreOS or OpenWRT routers. This package contains an AI agent skill that can handle zero-trust deployment from start to finish, **including downloading installing the required packages automatically.**
+# Cloudflare Tunnel on iStoreOS Configurator
 
-简化和完全自动化在 **iStoreOS** 或 **OpenWRT** 路由器上设置 **Cloudflare Tunnel (cloudflared)** 的过程。此包包含一个 AI 智能体（Agent）技能，可以全程处理零信任部署，**包括自动下载和安装所需的软件包。**
+## Overview
+This skill fully automates the deployment of an active Cloudflare Zero Trust Tunnel on an OpenWRT or iStoreOS router.
 
-## Automation Workflow (自动化执行流程图)
-```mermaid
-graph TD
-    A[User Provides Credentials & Token<br/>用户提供凭证和令牌] --> B[Agent SSH Connects to Router<br/>Agent 通过 SSH 连接路由器]
-    B --> C{Detect Architecture<br/>检测路由器架构}
-    C -->|x86_64, aarch64, etc.| D[Download Compatible cloudflared.ipk<br/>下载兼容的安装包]
-    D --> E[opkg install<br/>自动安装插件]
-    E --> F[Clean up Old Configs<br/>清理旧配置和遗留文件]
-    F --> G[Write Token to UCI DB<br/>将 Token 写入 UCI 数据库]
-    G --> H[Restart cloudflared Service<br/>重启 Cloudflared 服务]
-    H --> I[Verify Logs for Connectivity<br/>检查日志验证连接状态]
-    I --> J[Done! Tunnel Active<br/>完成！隧道已激活]
+When a user requests to "install cloudflare tunnel" or "configure cloudflared" and provides a router IP, credentials, and their Cloudflare Tunnel token, you should execute the following steps exactly as described.
+
+## Execution Steps
+
+### Step 1: Connect to the Router
+Establish an SSH connection to the router using the provided credentials.
+*Note: Due to the nature of router deployments, you may need to accept the SSH fingerprint automatically (e.g., `-o StrictHostKeyChecking=no`).*
+
+### Step 2: Determine Architecture
+Run the following command to determine the router's architecture:
+```bash
+uname -m
+```
+This typically outputs `x86_64`, `aarch64`, etc.
+
+### Step 3: Download and Install the `cloudflared` package
+Based on the architecture detected in Step 2, download the appropriate `.ipk` package from the OpenWRT official releases repository to the `/tmp` directory.
+
+Example for `x86_64`:
+```bash
+cd /tmp
+wget https://downloads.openwrt.org/releases/24.10.5/packages/x86_64/packages/cloudflared_2025.5.0-r1_x86_64.ipk
+opkg install cloudflared_2025.5.0-r1_x86_64.ipk
+```
+*(If the exact version 2025.5.0-r1 is not available or you are on a different architecture, search or infer the correct OpenWRT package URL for `cloudflared` before downloading).*
+
+### Step 4: Stop and Clean Legacy Configurations
+To ensure a clean slate, stop the service and remove old configurations:
+```bash
+/etc/init.d/cloudflared stop
+rm -rf /etc/config/cloudflared
+rm -rf /etc/cloudflared
+rm -f /var/log/cloudflared.log
 ```
 
-## Configured Files & Paths (配置文件详解)
-This skill modifies the core OpenWRT configuration system (UCI). Below are the specific files interacted with:
-该技能会修改 OpenWRT 的核心配置系统 (UCI)。以下是交互的特定文件：
-
-### 1. `/etc/config/cloudflared`
-This is the main OpenWRT configuration file managed by UCI. When the agent runs `uci set ...`, it writes the user's token directly here.
-这是由 UCI 管理的 OpenWRT 主配置文件。当 Agent 运行 `uci set ...` 时，它会将用户的口令直接写入此处。
-
-**Generated Content Example (生成的文件内容示例):**
-```text
-config cloudflared 'config'
-        option enabled '1'              # Automatically set by Agent to start on boot
-        option token 'eyJhIjoi...'      # The Token provided by the user
-        option config '/etc/cloudflared/config.yml'
-        option origincert '/etc/cloudflared/cert.pem'
-        option protocol 'http2'
-        option loglevel 'info'
-        option logfile '/var/log/cloudflared.log'
+### Step 5: Initialize Clean Environment & Recreate Configuration Files
+**CRITICAL:** Sometimes the `opkg` installer leaves the config template as `cloudflared-opkg` or fails to recreate the directories.
+```bash
+mkdir -p /etc/cloudflared
 ```
 
-### 2. `/var/log/cloudflared.log`
-The agent creates and constantly monitors this log file to verify that the tunnel connection has successfully reached the Cloudflare Edge network (looking for `Registered tunnel connection`).
-Agent 会监控此日志文件，以验证隧道连接是否成功到达 Cloudflare 边缘网络。
+### Step 6: Configure the Token via UCI
+Use the OpenWRT Unified Configuration Interface (UCI) to set the token and enable the service. Replace `$TOKEN` with the user's provided token.
 
-## Prerequisites (前提条件)
-- **Router IP & Credentials (路由器 IP 和凭据):** The agent needs SSH access to the iStoreOS router (typically `root` at `192.168.x.x` or similar). (Agent 需要 SSH 访问 iStoreOS 路由器，通常是 `192.168.x.x` 的 `root` 用户。)
-- **Cloudflare Tunnel Token (隧道令牌):** A valid token from the Cloudflare Zero Trust dashboard. (来自 Cloudflare Zero Trust 仪表板的有效令牌。)
+```bash
+uci set cloudflared.config.token='$TOKEN'
+uci set cloudflared.config.enabled='1'
+uci commit cloudflared
+```
 
-## Execution Steps (执行步骤)
+### Step 7: Enable and Restart the Service
+```bash
+/etc/init.d/cloudflared enable
+/etc/init.d/cloudflared restart
+```
 
-When a user requests to configure Cloudflare Tunnel on their iStoreOS router, follow these steps strictly to ensure full automation:
-当用户请求在其 iStoreOS 路由器上配置 Cloudflare Tunnel 时，请严格按照以下步骤操作以确保全自动化：
+### Step 8: Verify Connectivity
+Wait a few seconds, then check the logs:
+```bash
+tail -n 20 /var/log/cloudflared.log
+```
+Look for a line containing `Registered tunnel connection`. If present, the tunnel is active.
 
-1. **Connect via SSH (通过 SSH 连接):**
-   - Use the `run_command` and `send_command_input` tools to SSH into the router using the provided IP, username, and password. (使用 `run_command` 和 `send_command_input` 工具，利用提供的 IP、用户名和密码 SSH 进入路由器。)
-   - Wait for the shell prompt. (等待 Shell 提示符出现。)
+## Troubleshooting 503 Service Unavailable
+If the user reports that the tunnel is active but they are getting an HTTP 503 error when trying to access their local OpenWRT web interface (e.g., `192.168.1.1` mapped to `router.domain.com`), inform them of the following:
 
-2. **Check Architecture & Download Cloudflared (检查架构并下载 Cloudflared):**
-   - Determine the router's architecture (usually x86_64 or aarch64) and find the latest compatible `cloudflared` `.ipk` package from official or community OpenWRT/iStoreOS repositories. (确定路由器的架构，通常是 x86_64 或 aarch64，并从官方或社区的 OpenWRT/iStoreOS 软件仓库找到最新的兼容 `cloudflared` `.ipk` 安装包。)
-   - If a specific version is not requested, use `wget` or `curl` on the router to download the appropriate `.ipk` directly into `/tmp`. (如果没有要求特定版本，请在路由器上使用 `wget` 或 `curl` 将合适的 `.ipk` 直接下载到 `/tmp` 目录。)
+"Your router's local web interface likely uses a self-signed SSL certificate. Cloudflare is rejecting this by default. Please go to your Cloudflare Zero Trust Dashboard -> Networks -> Tunnels -> [Your Tunnel] -> Public Hostname. Edit the specific hostname rule, expand 'Additional application settings' -> 'TLS', and enable **No TLS Verify**. Save the rule and try again in 1 minute."
 
-3. **Install the Package (安装软件包):**
-   - Run `opkg install /tmp/cloudflared_*.ipk` to install the package. (运行 `opkg install /tmp/cloudflared_*.ipk` 安装该软件包。)
+---
 
-4. **Clean Up Previous Configurations (清理之前的配置):**
-   - In case of a reinstall, clear old states. (如果是重新安装，请清除旧状态。)
-   ```sh
-   /etc/init.d/cloudflared stop
-   rm -rf /etc/config/cloudflared
-   rm -rf /etc/cloudflared
-   rm -f /var/log/cloudflared.log
-   ```
+## 适用于中文用户的说明 (Chinese Version)
 
-5. **Apply New Configuration via UCI (通过 UCI 应用新配置):**
-   - Configure the token and enable the service using UCI (Unified Configuration Interface): (使用 UCI 配置令牌并启用服务：)
-   ```sh
-   # Agent: Replace YOUR_CF_TUNNEL_TOKEN with the actual token provided by user.
-   uci set cloudflared.config.token='YOUR_CF_TUNNEL_TOKEN'
-   uci set cloudflared.config.enabled='1'
-   uci commit cloudflared
-   ```
+### 步骤 1：连接到路由器
+使用提供的凭证建立到路由器的 SSH 连接。(建议使用 `-o StrictHostKeyChecking=no`)
 
-6. **Start the Service (启动服务):**
-   - Restart the service to apply the configuration. (重启服务以应用配置。)
-   ```sh
-   /etc/init.d/cloudflared enable
-   /etc/init.d/cloudflared restart
-   /etc/init.d/cloudflared status
-   ```
+### 步骤 2：确定架构
+运行 `uname -m` 确定路由器的架构类型（例如 `x86_64` 或 `aarch64`）。
 
-7. **Verify Logs (验证日志):**
-   - Check the logs to ensure the tunnel successfully established a connection with Cloudflare's edge servers. (检查日志以确保隧道成功与 Cloudflare 的边缘服务器建立连接。)
-   ```sh
-   tail -n 20 /var/log/cloudflared.log
-   ```
+### 步骤 3：下载并安装 `cloudflared`
+根据检测到的架构，从 OpenWRT 官方源下载 `.ipk` 到 `/tmp` 并使用 `opkg` 安装。
+```bash
+cd /tmp
+wget https://downloads.openwrt.org/releases/24.10.5/packages/x86_64/packages/cloudflared_2025.5.0-r1_x86_64.ipk
+opkg install cloudflared_2025.5.0-r1_x86_64.ipk
+```
 
-## Troubleshooting (故障排除)
-- **HTTP 503 Errors (503错误):** If mapped domains return a 503 error but local access is fine (HTTP 200), advise the user to check their Cloudflare Zero Trust dashboard: (如果映射的域名返回 503 错误但本地访问正常，请建议用户检查其 Cloudflare Zero Trust 仪表板：)
-  - Go to the Public Hostname configuration -> **Additional application settings** -> **TLS**. (转到 Public Hostname 配置 -> Additional application settings -> TLS。)
-  - Enable **No TLS Verify**. (启用 **No TLS Verify**。这经常发生，因为 OpenWRT 本地 Web 界面通常没有受信任的 SSL 证书。)
-- **Package Installation Fails (安装包失败):** If `opkg install` fails due to architecture mismatches, verify `uname -m` and download the correct `.ipk`. (如果由于架构不匹配导致 `opkg install` 失败，请验证 `uname -m` 并下载正确的 `.ipk`。)
+### 步骤 4：停止并清理旧配置
+```bash
+/etc/init.d/cloudflared stop
+rm -rf /etc/config/cloudflared
+rm -rf /etc/cloudflared
+rm -f /var/log/cloudflared.log
+```
+
+### 步骤 5：初始化纯净环境
+**注意：** 安装包有时不会自动创建工作目录，必须手动创建，防止配置下发失败。
+```bash
+mkdir -p /etc/cloudflared
+```
+
+### 步骤 6：通过 UCI 写入 Token
+```bash
+uci set cloudflared.config.token='用户提供的TOKEN'
+uci set cloudflared.config.enabled='1'
+uci commit cloudflared
+```
+
+### 步骤 7：启用并重启服务
+```bash
+/etc/init.d/cloudflared enable
+/etc/init.d/cloudflared restart
+```
+
+### 步骤 8：验证连接
+使用 `tail -n 20 /var/log/cloudflared.log` 检查日志。需要看到 `Registered tunnel connection` 字样。
+
+### 遇到 503 错误排查提示
+如果用户可以连接 Tunnel 但访问内网的 HTTPS 服务报 503 错误（特别是 iStoreOS 主页），请提示用户进入 Cloudflare Zero Trust 面板 -> Public Hostname 编辑路由规则 -> 展开 `Additional application settings` -> 进入 `TLS` 选项卡 -> 开启 **No TLS Verify**，等待 1 分钟即可。

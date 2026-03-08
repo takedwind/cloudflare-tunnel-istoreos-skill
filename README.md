@@ -9,10 +9,10 @@ Simplify and automate the process of setting up **Cloudflare Tunnel (cloudflared
 ```mermaid
 graph TD
     A[User Provides Credentials & Token] --> B[Agent SSH Connects to Router]
-    B --> C{Detect Architecture}
-    C -->|x86_64, aarch64, etc.| D[Download Compatible cloudflared.ipk]
-    D --> E[opkg install]
-    E --> F[Clean up Old Configs]
+    B --> C{Detect Architecture via `uname -m`}
+    C -->|x86_64, aarch64, etc.| D[Construct Download URL & `wget` cloudflared.ipk]
+    D --> E[`opkg install` to install package]
+    E --> F[Clean up Old Configs & Create `/etc/cloudflared`]
     F --> G[Write Token to UCI DB]
     G --> H[Restart cloudflared Service]
     H --> I[Verify Logs for Connectivity]
@@ -51,25 +51,37 @@ If you are using an AI agent (e.g., Antigravity), you can import the `SKILL.md` 
 
 > *"Install my cloudflare tunnel on my iStoreOS router at 192.168.1.1. My token is eyJh..."*
 
-The agent will read the `SKILL.md` instructions, download the package, install it, and execute the configuration steps automatically.
+The agent will read the `SKILL.md` instructions, detect the architecture, dynamically download the package from the OpenWRT releases server, install it via `opkg`, and execute the configuration steps automatically.
 
 ### Manual Setup
 If you prefer to configure this manually on your iStoreOS router via SSH:
 
 1. SSH into your router: `ssh root@192.168.x.x`
-2. Download and install `cloudflared` `.ipk`:
+2. Determine your architecture and download the right `cloudflared` `.ipk`:
    ```bash
+   uname -m # (e.g., outputs x86_64)
+   
    cd /tmp
    # Example: Download package suitable for x86_64
-   wget https://your-repo/cloudflared_xxx.ipk
-   opkg install cloudflared_xxx.ipk
+   wget https://downloads.openwrt.org/releases/24.10.5/packages/x86_64/packages/cloudflared_2025.5.0-r1_x86_64.ipk
+   
+   # Install the ipk
+   opkg install cloudflared_2025.5.0-r1_x86_64.ipk
    ```
 3. Run the following commands, replacing `YOUR_TOKEN_HERE` with your actual Cloudflare Tunnel token:
 
 ```bash
+# Clean previous state and explicitly recreate the config folder
+/etc/init.d/cloudflared stop
+rm -rf /etc/config/cloudflared /etc/cloudflared
+mkdir -p /etc/cloudflared
+
+# Write UCI config
 uci set cloudflared.config.token='YOUR_TOKEN_HERE'
 uci set cloudflared.config.enabled='1'
 uci commit cloudflared
+
+# Enable and start
 /etc/init.d/cloudflared enable
 /etc/init.d/cloudflared restart
 ```
