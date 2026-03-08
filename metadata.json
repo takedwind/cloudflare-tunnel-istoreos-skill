@@ -1,0 +1,7 @@
+{
+  "name": "Cloudflare Tunnel iStoreOS Automator",
+  "version": "1.0.0",
+  "description": "An agent skill to setup and troubleshoot Cloudflare Tunnel on iStoreOS devices.",
+  "author": "Antigravity",
+  "keywords": ["cloudflare", "zero-trust", "istoreos", "openwrt", "automation"]
+}
