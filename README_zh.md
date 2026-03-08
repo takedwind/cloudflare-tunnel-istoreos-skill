@@ -8,88 +8,76 @@
 
 ```mermaid
 graph TD
-    A[用户提供凭证和令牌] --> B[Agent 通过 SSH 连接路由器]
-    B --> C{检测路由器架构 `uname -m`}
-    C -->|x86_64, aarch64, etc.| D[构造 OpenWRT 下载链接并 wget 安装包]
-    D --> E[执行 `opkg install` 自动安装插件]
-    E --> F[清理旧配置和遗留文件并创建 `/etc/cloudflared`]
-    F --> G[将 Token 写入 UCI 数据库]
-    G --> H[重启 Cloudflared 服务]
-    H --> I[检查日志验证连接状态]
+    A[第一步：用户提供凭证和令牌] --> B[第二步：Agent 通过 SSH 连接路由器]
+    B --> C{第三步：检测路由器架构 `uname -m`}
+    C -->|x86_64, aarch64, etc.| D[第四步：构造 OpenWRT 下载链接并 wget 安装包]
+    D --> E[第五步：执行 `opkg install` 自动安装插件]
+    E --> F[第六步：清理旧配置和遗留文件并创建 `/etc/cloudflared`]
+    F --> G[第七步：将 Token 写入 UCI 数据库]
+    G --> H[第八步：重启 Cloudflared 服务]
+    H --> I[第九步：检查日志验证连接状态]
     I --> J[完成！隧道已激活]
 ```
 
-## 这是什么？
-用户经常希望在 OpenWRT/iStoreOS 上部署 `cloudflared` 扩展，但在查找正确的架构包 (`.ipk`)、命令行设置、SSL 验证问题或 UCI 配置方面遇到困难。此技能（专为 Antigravity/Cursor/Devin 等 AI Agent 设计）允许 AI 自动 SSH 连接到路由器，**通过 `uname -m` 自动检测硬件架构，构造对应的 `downloads.openwrt.org` 地址并下载兼容的 `cloudflared.ipk` 包，然后使用 `opkg` 进行安装**。装完之后直接配置 CF Tunnel 令牌，建立远程隧道的穿透连接，全程实现无人值守。
+## 详细执行步骤
 
-## 配置文件详解
+本仓库被设计为无论由运行 `SKILL.md` 的 AI 代理 (例如 Cursor / Antigravity)，还是通过手动执行 Bash 命令的人类来执行流程，都能达到相同且可预测的结果：
 
-该技能会修改 OpenWRT 的核心配置系统 (UCI)。以下是交互的特定文件：
+### 第一步 / 第二步：获取凭据并连接 SSH
+您需要提供路由器的 IP (`192.168.1.1`)、SSH 用户名/密码，以及您的 Cloudflare Tunnel Token（CF 令牌，例如 `eyJh...`）。Agent 将使用 SSH (`ssh root@ip`) 登录您的 OpenWRT / iStoreOS 路由器。
 
-### 1. `/etc/config/cloudflared`
-这是由 UCI 管理的 OpenWRT 主配置文件。当 Agent 运行 `uci set ...` 时，它会将用户的口令直接写入此处。
+### 第三步：架构检测
+执行脚本或智能体将通过运行 `uname -m` 命令来查明准确的 CPU 硬件架构 (例如 `x86_64` 或 `aarch64`)，以便下载对应的二进制插件文件。
 
-**生成的文件内容示例:**
-```text
-config cloudflared 'config'
-        option enabled '1'              # 由 Agent 自动设置为开机自启
-        option token 'eyJhIjoi...'      # 用户提供的 Token
-        option config '/etc/cloudflared/config.yml'
-        option origincert '/etc/cloudflared/cert.pem'
-        option protocol 'http2'
-        option loglevel 'info'
-        option logfile '/var/log/cloudflared.log'
+### 第四步 / 第五步：下载与安装包
+程序会为 `downloads.openwrt.org` 下载服务器构造精准的地址链接。使用 `wget` 将 `.ipk` 后缀的包下载到临时文件夹 `/tmp`，随后通过 `opkg` 运行安装。
+```bash
+cd /tmp
+# 这里的架构名称和版本，Agent 会根据上一步的返回自动填入：
+wget https://downloads.openwrt.org/releases/24.10.5/packages/x86_64/packages/cloudflared_2025.5.0-r1_x86_64.ipk
+opkg install cloudflared_2025.5.0-r1_x86_64.ipk
 ```
 
-### 2. `/var/log/cloudflared.log`
-Agent 会监控此日志文件，以验证隧道连接是否成功到达 Cloudflare 边缘网络（寻找 `Registered tunnel connection`）。
-
-## 如何使用
-
-### 用于 Agent 工作流 (`SKILL.md`)
-如果你使用的是 AI Agent（例如 Antigravity），你可以将 `SKILL.md` 文件导入到 Agent 的技能目录中。导入后，你只需对 Agent 说：
-
-> *"把我的 Cloudflare Tunnel 安装在 192.168.1.1 的 iStoreOS 路由器上，我的 Token 是 eyJh..."*
-
-Agent 会读取 `SKILL.md` 中的说明，自动检测 CPU 架构、并凭借特定逻辑动态寻找 `.ipk` 下载链接通过 `wget` 将软件包下载到 `/tmp`，使用 `opkg` 完成全部安装及配置下发步骤。
-
-### 手动设置
-如果您喜欢通过 SSH 在您的 iStoreOS 路由器上手动配置此设置：
-
-1. 通过 SSH 连接到您的路由器: `ssh root@192.168.x.x`
-2. 确定你的架构，并下载对应的 `cloudflared` 的 `.ipk` 文件:
-   ```bash
-   uname -m # (例如输出 x86_64)
-
-   cd /tmp
-   # 示例：通过 wget 下载适合 x86_64 架构的包 （版本号请根据实际替换）
-   wget https://downloads.openwrt.org/releases/24.10.5/packages/x86_64/packages/cloudflared_2025.5.0-r1_x86_64.ipk
-   
-   # 执行安装
-   opkg install cloudflared_2025.5.0-r1_x86_64.ipk
-   ```
-3. 运行以下命令，将 `YOUR_TOKEN_HERE` 替换为实际的 CF Token：
-
+### 第六步：清理运行环境
+为了避免遗留配置导致的冲突，脚本会停止当前服务，清除掉旧有配置文件，并显式重建需要的环境配置目录（`/etc/cloudflared`）。
 ```bash
-# 清理以前的配置缓存，重建工作目录
 /etc/init.d/cloudflared stop
 rm -rf /etc/config/cloudflared /etc/cloudflared
 mkdir -p /etc/cloudflared
+```
 
-# 写入 UCI 节点
+### 第七步：通过 UCI 写入 Token 
+OpenWRT 依赖 Unified Configuration Interface (UCI) 接口机制运作。用户的 Token 令牌会被直接以键值形式注入进数据库中。
+```bash
+# `YOUR_TOKEN_HERE` 实际执行时会被您的对应令牌自动替换
 uci set cloudflared.config.token='YOUR_TOKEN_HERE'
 uci set cloudflared.config.enabled='1'
 uci commit cloudflared
+```
 
-# 启动并重启服务使其生效
+### 第八步：重启以应用服务 
+配置设置自启动参数，并重启守护程序重新应用新写入的配置。
+```bash
 /etc/init.d/cloudflared enable
 /etc/init.d/cloudflared restart
 ```
 
-4. 检查隧道是否成功运行:
+### 第九步：验证网络连通性日志
+代理将去监控 `/var/log/cloudflared.log` 日志输出，从而为您证明：插件连结 Cloudflare 边缘网络的请求已被正式接受 (`Registered tunnel connection`)。
 ```bash
 tail -n 20 /var/log/cloudflared.log
 ```
+
+## 如何使用
+
+### 用于 Agent 工作流 (`SKILL.md`)
+只需要向您的个人 AI 助手或编程框架中导入 `SKILL.md` 的说明文件即可：
+> *"把我的 Cloudflare Tunnel 安装在 192.168.1.1 的 iStoreOS 路由器上，我的 Token 是 eyJh..."*
+
+AI 将完美全自动化代劳处理第一步至第九步。
+
+### 手动设置 
+如果您更喜欢通过终端进行，请只需在路由器的 SSH 终端中按顺序手工执行**第四至第九步**中的 Bash 代码段。
 
 ## 许可证 (License)
 MIT License
