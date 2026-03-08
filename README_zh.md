@@ -4,6 +4,8 @@
 
 简化和完全自动化在 **iStoreOS** 或 **OpenWRT** 路由器上设置 **Cloudflare Tunnel (cloudflared)** 的过程。此包包含一个 AI 智能体（Agent）技能，可以全程处理零信任部署，**包括自动检测架构、下载源包和安装所需的环境。**
 
+> **标签 / Topics:** `cloudflare-tunnel`, `istoreos`, `openwrt`, `ai-agent`, `skill`, `zero-trust`, `automation`, `cursor-rules`, `skillsmp`, `cloudflared`
+
 ## 自动化执行流程图
 
 ```mermaid
