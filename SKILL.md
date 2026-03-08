@@ -71,11 +71,6 @@ tail -n 20 /var/log/cloudflared.log
 ```
 Look for a line containing `Registered tunnel connection`. If present, the tunnel is active.
 
-## Troubleshooting 503 Service Unavailable
-If the user reports that the tunnel is active but they are getting an HTTP 503 error when trying to access their local OpenWRT web interface (e.g., `192.168.1.1` mapped to `router.domain.com`), inform them of the following:
-
-"Your router's local web interface likely uses a self-signed SSL certificate. Cloudflare is rejecting this by default. Please go to your Cloudflare Zero Trust Dashboard -> Networks -> Tunnels -> [Your Tunnel] -> Public Hostname. Edit the specific hostname rule, expand 'Additional application settings' -> 'TLS', and enable **No TLS Verify**. Save the rule and try again in 1 minute."
-
 ---
 
 ## 适用于中文用户的说明 (Chinese Version)
@@ -123,6 +118,3 @@ uci commit cloudflared
 
 ### 步骤 8：验证连接
 使用 `tail -n 20 /var/log/cloudflared.log` 检查日志。需要看到 `Registered tunnel connection` 字样。
-
-### 遇到 503 错误排查提示
-如果用户可以连接 Tunnel 但访问内网的 HTTPS 服务报 503 错误（特别是 iStoreOS 主页），请提示用户进入 Cloudflare Zero Trust 面板 -> Public Hostname 编辑路由规则 -> 展开 `Additional application settings` -> 进入 `TLS` 选项卡 -> 开启 **No TLS Verify**，等待 1 分钟即可。

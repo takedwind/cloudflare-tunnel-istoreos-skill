@@ -91,15 +91,5 @@ uci commit cloudflared
 tail -n 20 /var/log/cloudflared.log
 ```
 
-## 解决 503 错误
-如果隧道在 Cloudflare 仪表板中显示为已连接，但您映射的本地网域（如 `router.yourdomain.com`）返回 **HTTP 503 Service Unavailable** 错误：
-
-1. 转到 Cloudflare Zero Trust Dashboard -> Networks -> Tunnels。
-2. 编辑您的隧道，进入“**Public Hostname**”标签页。
-3. 编辑抛出 503 的主机名映射。
-4. 展开 **Additional application settings** -> **TLS**。
-5. 启用 **No TLS Verify**。
-6. 保存并等待 1-2 分钟。这会绕过 Cloudflare 对路由器默认自签名证书的严格 SSL 检查。
-
 ## 许可证 (License)
 MIT License

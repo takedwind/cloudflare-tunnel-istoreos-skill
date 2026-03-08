@@ -20,7 +20,7 @@ graph TD
 ```
 
 ## What is this?
-Often, users want to deploy the `cloudflared` extension on OpenWRT/iStoreOS but struggle with finding the right architecture package (`.ipk`), command-line setup, SSL validation issues, or UCI configuration. This skill (designed for AI agents like Antigravity/Cursor/Devin) allows the AI to automatically SSH into the router, **detect the architecture, download the latest compatible `cloudflared.ipk`, install it**, configure the CF Tunnel token, establish the remote connection, and troubleshoot common issues like HTTP 503 errors.
+Often, users want to deploy the `cloudflared` extension on OpenWRT/iStoreOS but struggle with finding the right architecture package (`.ipk`), command-line setup, SSL validation issues, or UCI configuration. This skill (designed for AI agents like Antigravity/Cursor/Devin) allows the AI to automatically SSH into the router, **detect the architecture, download the latest compatible `cloudflared.ipk`, install it**, configure the CF Tunnel token, and establish the remote connection.
 
 ## Configured Files & Paths
 
@@ -90,16 +90,6 @@ uci commit cloudflared
 ```bash
 tail -n 20 /var/log/cloudflared.log
 ```
-
-## Troubleshooting 503 Errors
-If your tunnel shows as connected in the Cloudflare Dashboard, but your mapped local domains (e.g., `router.yourdomain.com`) return an **HTTP 503 Service Unavailable** error:
-
-1. Go to your Cloudflare Zero Trust Dashboard -> Networks -> Tunnels.
-2. Edit your tunnel and go to the **Public Hostname** tab.
-3. Edit the hostname mapping that is throwing the 503.
-4. Expand **Additional application settings** -> **TLS**.
-5. Enable **No TLS Verify**.
-6. Save and wait 1-2 minutes. This bypasses Cloudflare's strict SSL check against your router's default self-signed certificate.
 
 ## License
 MIT License
